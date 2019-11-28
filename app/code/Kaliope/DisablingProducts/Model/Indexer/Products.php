@@ -3,20 +3,22 @@ namespace Kaliope\DisablingProducts\Model\Indexer;
 
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Setup\Exception;
-
+use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory;
 
 class Products implements \Magento\Framework\Indexer\ActionInterface, \Magento\Framework\Mview\ActionInterface
 {
     protected $logger;
     protected $productRepository;
-
+    protected $productCollectionFactory;
 
     public function __construct(
         \Psr\Log\LoggerInterface $logger,
-        ProductRepositoryInterface $productRepository
+        ProductRepositoryInterface $productRepository,
+        CollectionFactory $productCollectionFactory
     )
     {
         $this->logger = $logger;
+        $this->productCollectionFactory = $productCollectionFactory;
         $this->productRepository = $productRepository;
     }
 
@@ -26,7 +28,9 @@ class Products implements \Magento\Framework\Indexer\ActionInterface, \Magento\F
     }
 
     public function executeFull(){
-        $this->actionDisabling([1]);
+
+        $collection = $this->getProductCollection();
+        $this->actionDisabling($collection->getAllIds());
     }
 
     public function executeList(array $ids){
@@ -57,5 +61,20 @@ class Products implements \Magento\Framework\Indexer\ActionInterface, \Magento\F
                 $this->logger->debug('productdisabled , id:'.$id);
             }
         }
+        //reindexall for update flat tables and index tables.
+    }
+
+    protected function getProductCollection()
+    {
+        $collection = $this->productCollectionFactory->create();
+        $collection->addAttributeToSelect('*');
+        $collection->addWebsiteFilter();
+        $collection->addStoreFilter();
+        $collection->joinField(
+            'qty', 'cataloginventory_stock_item', 'qty', 'product_id=entity_id', '{{table}}.stock_id=1', 'left'
+        );
+        $collection->addAttributeToFilter('qty',['lt'=>5]);
+        //filter with OR condition for description and media
+        return $collection;
     }
 }

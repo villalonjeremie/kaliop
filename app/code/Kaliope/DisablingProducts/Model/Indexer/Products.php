@@ -2,15 +2,13 @@
 namespace Kaliope\DisablingProducts\Model\Indexer;
 
 use Magento\Catalog\Api\ProductRepositoryInterface;
+use Magento\Setup\Exception;
 
 
 class Products implements \Magento\Framework\Indexer\ActionInterface, \Magento\Framework\Mview\ActionInterface
 {
     protected $logger;
-
-
     protected $productRepository;
-
 
 
     public function __construct(
@@ -19,45 +17,45 @@ class Products implements \Magento\Framework\Indexer\ActionInterface, \Magento\F
     )
     {
         $this->logger = $logger;
-                $this->productRepository = $productRepository;
-
+        $this->productRepository = $productRepository;
     }
 
 
     public function execute($ids){
-        echo 'execute';
-        $this->logger->debug($ids);
+        $this->actionDisabling($ids);
     }
 
     public function executeFull(){
-        echo 'executeFull';
-        $product = $this->productRepository->getById(1);
-
-
-        $countImage = $product->getMediaGalleryImages()->getSize();
-        $description = str_replace(' ', '', $product->getData('description'));
-        $quantity = $product->getQuantityAndStockStatus()['qty'];
-
-        if ($countImage == 0 || is_null($description) || $description=='' || (int)$quantity <= 5) {
-
-            $this->logger->debug(var_dump('productdisabled'));
-
-        }
+        $this->actionDisabling([1]);
     }
 
     public function executeList(array $ids){
-        echo 'executeList';
-        $this->logger->debug($ids);
-
+        $this->actionDisabling($ids);
     }
 
 
     public function executeRow($id){
-        echo 'executeRow';
-        $this->logger->debug('executeRow');
+        $this->actionDisabling([$id]);
+    }
 
-        $this->logger->debug($id);
+    protected function actionDisabling(array $ids) {
+        foreach ($ids as $id) {
+            $product = $this->productRepository->getById($id);
+            $countImage = $product->getMediaGalleryImages()->getSize();
+            $description = str_replace(' ', '', $product->getData('description'));
+            $quantity = $product->getQuantityAndStockStatus()['qty'];
+            $this->logger->debug(var_dump($product->getStatus()));
 
+            if ($countImage == 0 || is_null($description) || $description=='' || (int)$quantity <= 5) {
+                $product->setStatus(\Magento\Catalog\Model\Product\Attribute\Source\Status::STATUS_DISABLED);
+                try{
+                    $this->productRepository->save($product);
+                } catch (Exception $e) {
+                    $this->logger->debug($e->getMessage());
 
+                }
+                $this->logger->debug('productdisabled , id:'.$id);
+            }
+        }
     }
 }
